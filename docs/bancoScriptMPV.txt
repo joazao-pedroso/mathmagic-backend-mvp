@@ -1,0 +1,62 @@
+DROP DATABASE IF EXISTS `mathmagic` ;
+CREATE DATABASE IF NOT EXISTS `mathmagic` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci ;
+USE `mathmagic` ;
+
+CREATE TABLE IF NOT EXISTS `aluno` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `nome` VARCHAR(80) NOT NULL,
+  `email` VARCHAR(120) NOT NULL UNIQUE,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `trilha` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `nome` VARCHAR(80) NOT NULL,
+  `descricao` TEXT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS `Jogo` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `nome` VARCHAR(80) NOT NULL,
+  `descricao` TEXT NULL,
+  `trilha_id` INT NOT NULL,
+  PRIMARY KEY (`id`),
+  INDEX `fk_Jogo_Trilha_idx` (`trilha_id` ASC) VISIBLE,
+  CONSTRAINT `fk_Jogo_Trilha`
+    FOREIGN KEY (`trilha_id`)
+    REFERENCES `Trilha` (`id`)
+    ON DELETE RESTRICT -- Se uma trilha for deletada, não pode ter jogos associados
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `DesempenhoJogo` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `aluno_id` INT NOT NULL,
+  `jogo_id` INT NOT NULL,
+  `trilha_id` INT NOT NULL, -- Novo campo adicionado!
+  `data_hora` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `passou` BOOLEAN NOT NULL,
+  `acertos` JSON NULL, -- Tipo JSON para MySQL 5.7.8+
+  `erros` JSON NULL,   -- Tipo JSON para MySQL 5.7.8+
+  PRIMARY KEY (`id`),
+  INDEX `fk_DesempenhoJogo_Aluno_idx` (`aluno_id` ASC) VISIBLE,
+  INDEX `fk_DesempenhoJogo_Jogo_idx` (`jogo_id` ASC) VISIBLE,
+  INDEX `fk_DesempenhoJogo_Trilha_idx` (`trilha_id` ASC) VISIBLE, -- Índice para o novo campo
+  CONSTRAINT `fk_DesempenhoJogo_Aluno`
+    FOREIGN KEY (`aluno_id`)
+    REFERENCES `Aluno` (`id`)
+    ON DELETE CASCADE  -- Se o aluno for deletado, deleta o desempenho
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_DesempenhoJogo_Jogo`
+    FOREIGN KEY (`jogo_id`)
+    REFERENCES `Jogo` (`id`)
+    ON DELETE CASCADE  -- Se o jogo for deletado, deleta o desempenho
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_DesempenhoJogo_Trilha` -- Nova chave estrangeira
+    FOREIGN KEY (`trilha_id`)
+    REFERENCES `Trilha` (`id`)
+    ON DELETE RESTRICT -- Não permite deletar uma trilha se houver desempenhos associados a ela
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

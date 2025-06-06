@@ -1,0 +1,24 @@
+}
+   "aluno" : 1
+   "trilha" : 1
+   "jogo" : 2
+   "passou" : "true or false"
+   "acertos" : {
+	"3 x 2"
+	}
+   "erros" : {
+	"8 x 7"
+	}
+}
+
+-rota para validar se o próximo jogo está desbloqueado, usando o "passou" : "true or false"
+retorna se ele passou ou não para desbloquear o próximo jogo ou finalizar a trilha.
+
+-rota para cadastrar a tentativa do aluno, usando "aluno","trilha", "jogo", "passou"
+cadastra no banco a tentativa do aluno, na trilha tal, jogo tal e se passou ou não, para consulta do professor
+
+-rota para analisar os acertos e manda pra IA avaliar, usa a lista de "acertos"
+retorna um relatório de acertos, com as tabuadas que ele mais acertou e outros insights 
+
+-rota para analisar os erros e manda pra IA avaliar, usa a lista de "erros"
+retorna um relatório de erros, com as tabuadas que ele mais teve dificuldade e outros insights

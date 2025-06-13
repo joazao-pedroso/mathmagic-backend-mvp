@@ -33,7 +33,6 @@ CREATE TABLE IF NOT EXISTS `Jogo` (
 
 CREATE TABLE IF NOT EXISTS `DesempenhoJogo` (
   `id` INT NOT NULL AUTO_INCREMENT,
-  `aluno_id` INT NOT NULL,
   `jogo_id` INT NOT NULL,
   `trilha_id` INT NOT NULL, -- Novo campo adicionado!
   `data_hora` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -41,14 +40,8 @@ CREATE TABLE IF NOT EXISTS `DesempenhoJogo` (
   `acertos` JSON NULL, -- Tipo JSON para MySQL 5.7.8+
   `erros` JSON NULL,   -- Tipo JSON para MySQL 5.7.8+
   PRIMARY KEY (`id`),
-  INDEX `fk_DesempenhoJogo_Aluno_idx` (`aluno_id` ASC) VISIBLE,
   INDEX `fk_DesempenhoJogo_Jogo_idx` (`jogo_id` ASC) VISIBLE,
   INDEX `fk_DesempenhoJogo_Trilha_idx` (`trilha_id` ASC) VISIBLE, -- Índice para o novo campo
-  CONSTRAINT `fk_DesempenhoJogo_Aluno`
-    FOREIGN KEY (`aluno_id`)
-    REFERENCES `Aluno` (`id`)
-    ON DELETE CASCADE  -- Se o aluno for deletado, deleta o desempenho
-    ON UPDATE CASCADE,
   CONSTRAINT `fk_DesempenhoJogo_Jogo`
     FOREIGN KEY (`jogo_id`)
     REFERENCES `Jogo` (`id`)

@@ -1,14 +1,9 @@
 }
-   "aluno" : 1
    "trilha" : 1
    "jogo" : 2
    "passou" : "true or false"
-   "acertos" : {
-	"3 x 2"
-	}
-   "erros" : {
-	"8 x 7"
-	}
+   "acertos" : ["3x3, "3x4"]
+   "erros" : ["3x9, "3x8"]
 }
 
 -rota para validar se o próximo jogo está desbloqueado, usando o "passou" : "true or false"

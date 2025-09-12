@@ -4,8 +4,9 @@ load_dotenv()
 from flask import Flask, request, jsonify, session
 from config import Config
 from models import db, Aluno, Trilha, Jogo, DesempenhoJogo, Professor, Sala, Admin, aluno_sala_associacao
-from datetime import datetime, timedelta
 from flask_cors import CORS
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, create_refresh_token, JWTManager, get_jwt
+from datetime import timedelta
 
 import google.generativeai as genai
 import os
@@ -18,11 +19,11 @@ CORS(app)
 
 app.config['SECRET_KEY'] = 'grupofunction'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=2)
+jwt = JWTManager(app)
 
 import json
 
 db.init_app(app)
-from datetime import timedelta
 
 with app.app_context():
     db.create_all()
@@ -62,31 +63,33 @@ def login_admin():
     # 2. Verifique se o admin existe e se a senha está correta
     if not admin or not admin.verificar_senha(senha):
         return jsonify({"message": "Email ou senha incorretos."}), 401
-    
-    session['admin_id'] = admin.id
 
-    return jsonify({"message": "Login bem-sucedido!"}), 200
+    additional_claims = {"is_admin": True}
 
+    access_token = create_access_token(identity=str(admin.id), additional_claims=additional_claims)
 
-    current_admin_id = get_jwt_identity()
-    new_access_token = create_access_token(identity=current_admin_id)
-    return jsonify(access_token=new_access_token), 200
-
+    return jsonify(access_token=access_token), 200
 #-------------------CRUD COM AS TRILHAS---------------------
 
 # ROTA PARA VER AS TRILHAS - TESTADA E FUNCIONANDO
 @app.route('/api/trilhas', methods=['GET'])
+@jwt_required()
 def get_trilhas():
-    if 'admin_id' not in session:
-        return jsonify({"message": "Acesso negado: Login necessário."}), 401
+    claims = get_jwt()
+    if not claims.get('is_admin'):
+        return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
+
     trilhas = Trilha.query.all()
     return jsonify([t.to_dict() for t in trilhas]), 200
 
 # ROTA DE CRIAR TRILHA - TESTADA E FUNCIONANDO
 @app.route('/api/trilhas', methods=['POST'])
+@jwt_required()
 def create_trilha():
-    if 'admin_id' not in session:
-        return jsonify({"message": "Acesso negado: Login necessário."}), 401
+    claims = get_jwt()
+    if not claims.get('is_admin'):
+        return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
+
     data = request.get_json()
     nome = data.get('nome')
     descricao = data.get('descricao')
@@ -105,9 +108,12 @@ def create_trilha():
 
 # ROTA DE EDITAR TRILHA - TESTADA E FUNCIONANDO
 @app.route('/api/trilhas/<int:trilha_id>', methods=['PUT'])
+@jwt_required()
 def update_trilha(trilha_id):
-    if 'admin_id' not in session:
-        return jsonify({"message": "Acesso negado: Login necessário."}), 401
+    claims = get_jwt()
+    if not claims.get('is_admin'):
+        return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
+
     trilha = Trilha.query.get(trilha_id)
     if not trilha:
         return jsonify({"message": "Trilha não encontrada."}), 404
@@ -128,9 +134,12 @@ def update_trilha(trilha_id):
 
 # ROTA DE DELETAR TRILHA - TESTADA E FUNCIONANDO
 @app.route('/api/trilhas/<int:trilha_id>', methods=['DELETE'])
+@jwt_required()
 def delete_trilha(trilha_id):
-    if 'admin_id' not in session:
-        return jsonify({"message": "Acesso negado: Login necessário."}), 401
+    claims = get_jwt()
+    if not claims.get('is_admin'):
+        return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
+    
     trilha = Trilha.query.get(trilha_id)
     if not trilha:
         return jsonify({"message": "Trilha não encontrada."}), 404
@@ -145,9 +154,14 @@ def delete_trilha(trilha_id):
 
 # --------------------ROTAS DE CRUD DE JOGOS-------------------
 
-# ROTA DE VER OS JOGOS - AINDA NÃO TESTADA
+# ROTA DE VER OS JOGOS - TESTADA E FUNCIONANDO
 @app.route('/api/jogos', methods=['GET'])
+@jwt_required()
 def ver_jogos():
+    claims = get_jwt()
+    if not claims.get('is_admin'):
+        return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
+    
     jogos = Jogo.query.all()
     jogos_list = []
     for jogo in jogos:
@@ -157,9 +171,13 @@ def ver_jogos():
         jogos_list.append(jogo_dict)
     return jsonify(jogos_list), 200
 
-# ROTA PARA CRIAR UM NOVO JOGO - AINDA NÃO TESTADA
+# ROTA PARA CRIAR UM NOVO JOGO - TESTADA E FUNCIONANDO
 @app.route('/api/jogos', methods=['POST'])
+@jwt_required()
 def criar_jogo():
+    claims = get_jwt()
+    if not claims.get('is_admin'):
+        return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
     data = request.get_json()
     nome = data.get('nome')
     descricao = data.get('descricao')
@@ -184,9 +202,13 @@ def criar_jogo():
         db.session.rollback()
         return jsonify({"message": f"Erro ao criar jogo: {str(e)}"}), 500
 
-# ROTA PARA EDITAR UM JOGO - AINDA NÃO TESTADA
+# ROTA PARA EDITAR UM JOGO - TESTADA E FUNCIONANDO
 @app.route('/api/jogos/<int:jogo_id>', methods=['PUT'])
+@jwt_required()
 def editar_jogo(jogo_id):
+    claims = get_jwt()
+    if not claims.get('is_admin'):
+        return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
     jogo = Jogo.query.get(jogo_id)
     if not jogo:
         return jsonify({"message": "Jogo não encontrado."}), 404
@@ -214,9 +236,13 @@ def editar_jogo(jogo_id):
         db.session.rollback()
         return jsonify({"message": f"Erro ao atualizar jogo: {str(e)}"}), 500
 
-# ROTA DE DELETAR UM JOGO - AINDA NÃO TESTADA
+# ROTA DE DELETAR UM JOGO - TESTADA E FUNCIONANDO
 @app.route('/api/jogos/<int:jogo_id>', methods=['DELETE'])
+@jwt_required()
 def delete_jogo(jogo_id):
+    claims = get_jwt()
+    if not claims.get('is_admin'):
+        return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
     jogo = Jogo.query.get(jogo_id)
     if not jogo:
         return jsonify({"message": "Jogo não encontrado."}), 404
@@ -694,30 +720,6 @@ def get_analise_ia(aluno_id, trilha_id):
         return jsonify({"analise_ia": analise}), 200
     except Exception as e:
         return jsonify({"message": f"Erro ao gerar análise da IA: {str(e)}"}), 500
-
-
-    data = request.get_json()
-
-    nome = data.get('nome')
-    email = data.get('email')
-    senha = data.get('senha')
-
-
-    if not nome or not email or not senha:
-        return jsonify({"message": "Nome, senha e email são obrigatórios."}), 400
-
-    if Aluno.query.filter_by(email=email).first():
-        return jsonify({"message": "Email já cadastrado."}), 409 # Conflict
-
-    novo_aluno = Aluno(nome=nome, email=email)
-    novo_aluno.senha = senha # Atribui a senha, o setter fará o hash
-    try:
-        db.session.add(novo_aluno)
-        db.session.commit()
-        return jsonify({"message": "Aluno criado com sucesso!", "aluno": novo_aluno.to_dict()}), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"message": f"Erro ao criar aluno: {str(e)}"}), 500
 
 # =====================================FIM DAS ROTAS DO PROFESSOR======================================
 

@@ -105,7 +105,7 @@ class Sala(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(80), nullable=False)
     professor_id = db.Column(db.Integer, db.ForeignKey('professor.id'), nullable=False)
-    alunos = db.relationship('Aluno', secondary=aluno_sala_associacao, back_populates='salas')
+    alunos = db.relationship('Aluno', secondary=aluno_sala_associacao, back_populates='salas', cascade="all, delete-orphan")
     trilhas = db.relationship('Trilha', secondary=sala_trilha_associacao, back_populates='salas')
       
     def to_dict(self):

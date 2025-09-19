@@ -3,10 +3,11 @@ load_dotenv()
 
 from flask import Flask, request, jsonify, session
 from config import Config
-from models import db, Aluno, Trilha, Jogo, DesempenhoJogo, Professor, Sala, Admin, aluno_sala_associacao
-from flask_cors import CORS
+from models import db, Aluno, Trilha, Jogo, DesempenhoJogo, Professor, Sala, Admin
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, create_refresh_token, JWTManager, get_jwt
 from datetime import timedelta
+from flask_migrate import Migrate
+from flask_cors import CORS
 
 import google.generativeai as genai
 import os
@@ -24,6 +25,7 @@ jwt = JWTManager(app)
 import json
 
 db.init_app(app)
+migrate = Migrate(app, db)
 
 with app.app_context():
     db.create_all()
@@ -406,7 +408,7 @@ def delete_professor(professor_id):
 # ===========================================FIM DAS ROTAS DO ADM==================================================
 
 #============================================ROTAS DO PROFESSOR====================================================
-# ROTA DE LOGIN DO PROFESSOR - AINDA NÃO TESTADA
+# ROTA DE LOGIN DO PROFESSOR - TESTADA E FUNCIONANDO
 @app.route('/api/login_professor', methods=['POST'])
 def login_professor():
     email = request.json.get('email', None)

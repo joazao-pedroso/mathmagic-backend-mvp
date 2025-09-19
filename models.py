@@ -4,15 +4,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
 
-sala_trilha_associacao = db.Table('sala_trilha',
-    db.Column('sala_id', db.Integer, db.ForeignKey('sala.id'), primary_key=True),
-    db.Column('trilha_id', db.Integer, db.ForeignKey('trilha.id'), primary_key=True)
+# Tabela de junção para a relação muitos-para-muitos entre Sala e Trilha
+sala_trilha_association = db.Table('sala_trilha',
+    db.Column('sala_id', db.Integer, db.ForeignKey('sala.id')),
+    db.Column('trilha_id', db.Integer, db.ForeignKey('trilha.id'))
 )
 
-aluno_sala_associacao = db.Table('aluno_sala',
-    db.Column('aluno_id', db.Integer, db.ForeignKey('aluno.id'), primary_key=True),
-    db.Column('sala_id', db.Integer, db.ForeignKey('sala.id'), primary_key=True)
-)
 
 class Admin(db.Model):
     __tablename__ = 'admin'
@@ -37,7 +34,7 @@ class Admin(db.Model):
 
     def to_dict(self):
         return {
-            'id': str(self.id),
+            'id': self.id,
             'nome': self.nome,
             'email': self.email
         }
@@ -48,7 +45,7 @@ class Aluno(db.Model):
     nome = db.Column(db.String(80), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     senha_hash = db.Column(db.String(255), nullable=False, name='senha')
-    salas = db.relationship('Sala', secondary=aluno_sala_associacao, back_populates='alunos')
+    sala_id = db.Column(db.Integer, db.ForeignKey('sala.id'), nullable=False)
 
     def __repr__(self):
         return f'<Aluno {self.nome}>'
@@ -65,6 +62,7 @@ class Aluno(db.Model):
         return check_password_hash(self.senha_hash, senha_texto_puro)
 
     def to_dict(self):
+        # CORREÇÃO: Retornar o email correto
         return {
             'id': self.id,
             'nome': self.nome,
@@ -105,23 +103,25 @@ class Sala(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(80), nullable=False)
     professor_id = db.Column(db.Integer, db.ForeignKey('professor.id'), nullable=False)
-    alunos = db.relationship('Aluno', secondary=aluno_sala_associacao, back_populates='salas', cascade="all, delete-orphan")
-    trilhas = db.relationship('Trilha', secondary=sala_trilha_associacao, back_populates='salas')
+    alunos = db.relationship('Aluno', backref='sala', lazy=True, cascade="all, delete-orphan")
+    trilhas = db.relationship('Trilha', secondary=sala_trilha_association, back_populates='salas', lazy='dynamic')
       
     def to_dict(self):
-        return {
-            'id': self.id,
-            'nome': self.nome,
-            'professor_id': self.professor_id,
-            'trilhas': [trilha.to_dict() for trilha in self.trilhas]
+        sala_dict = {
+            "id": self.id,
+            "nome": self.nome,
+            "professor_id": self.professor_id,
+            "alunos": [aluno.to_dict() for aluno in self.alunos]
         }
+        sala_dict["trilhas"] = [trilha.to_dict() for trilha in self.trilhas]
+        return sala_dict
 
 class Trilha(db.Model):
     __tablename__ = 'trilha'
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(80), nullable=False)
     descricao = db.Column(db.Text)
-    salas = db.relationship('Sala', secondary=sala_trilha_associacao, back_populates='trilhas')
+    salas = db.relationship('Sala', secondary=sala_trilha_association, back_populates='trilhas', lazy='dynamic')
     jogos = db.relationship('Jogo', backref='trilha', lazy=True)
 
     def __repr__(self):
@@ -159,21 +159,15 @@ class DesempenhoJogo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     
     aluno_id = db.Column(db.Integer, db.ForeignKey('aluno.id'), nullable=False)
-    aluno = db.relationship('Aluno', backref='desempenhos', lazy=True)
-    
     jogo_id = db.Column(db.Integer, db.ForeignKey('jogo.id'), nullable=False)
     trilha_id = db.Column(db.Integer, db.ForeignKey('trilha.id'), nullable=False)
-
     sala_id = db.Column(db.Integer, db.ForeignKey('sala.id'), nullable=False)
-    sala = db.relationship('Sala', backref='desempenhos', lazy=True)
     
     data_hora = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     passou = db.Column(db.Boolean, nullable=False)
     acertos = db.Column(db.JSON, nullable=True)
     erros = db.Column(db.JSON, nullable=True)
     
-    trilha = db.relationship('Trilha', foreign_keys=[trilha_id], backref='desempenhos_trilha', lazy=True)
-
     def __repr__(self):
         return f'<DesempenhoJogo Aluno: {self.aluno_id}, Jogo: {self.jogo_id}, Trilha: {self.trilha_id}, Passou: {self.passou}>'
 

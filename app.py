@@ -8,6 +8,7 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 from datetime import timedelta
 from flask_migrate import Migrate
 from flask_cors import CORS
+from sqlalchemy.orm import joinedload
 
 import google.generativeai as genai
 import os
@@ -58,9 +59,59 @@ def register_admin():
         db.session.rollback()
         return jsonify({"message": f"Erro ao registrar: {str(e)}"}), 500
 
-# ROTA DE LOGIN DO ADM - TESTADA E FUNCIONANDO
-@app.route('/api/login_admin', methods=['POST'])
-def login_admin():
+@app.route('/api/login', methods=['POST'])
+def login():
+
+    data = request.get_json()
+    email = data.get('email')
+    senha = data.get('senha')
+
+    if not email or not senha:
+        return jsonify({"message": "Email e senha são obrigatórios para o login."}), 400
+
+    # 1. Tentar encontrar e autenticar como ADMIN (Prioridade 1)
+    user = Admin.query.filter_by(email=email).first()
+    if user and user.verificar_senha(senha):
+        funcao = 'admin'
+        # Adiciona a informação da função ao payload do token
+        additional_claims = {"funcao": funcao} 
+    
+    # 2. Tentar encontrar e autenticar como PROFESSOR (Prioridade 2)
+    else:
+        user = Professor.query.filter_by(email=email).first()
+        if user and user.verificar_senha(senha):
+            funcao = 'professor'
+            # Adiciona a informação da função ao payload do token
+            additional_claims = {"funcao": funcao}
+        
+        # 3. Tentar encontrar e autenticar como ALUNO (Prioridade 3)
+        else:
+            user = Aluno.query.filter_by(email=email).first()
+            if user and user.verificar_senha(senha):
+                funcao = 'aluno'
+                # Adiciona a informação da função ao payload do token
+                additional_claims = {"funcao": funcao}
+            
+            # Autenticação falhou em todas as tabelas
+            else:
+                return jsonify({"message": "Email ou senha incorretos."}), 401
+
+    # Autenticação bem-sucedida
+    
+    # Criamos o token com o ID do usuário e a função (role) em 'additional_claims'
+    access_token = create_access_token(
+        identity=str(user.id), 
+        additional_claims=additional_claims
+    )
+    
+    # Retorna o token e a função do usuário para o frontend saber qual fluxo seguir
+    return jsonify(
+        access_token=access_token,
+        usuario_id=user.id,
+        funcao=funcao
+    ), 200
+
+
 
     data = request.get_json()
     email = data.get('email')
@@ -86,7 +137,7 @@ def login_admin():
 @jwt_required()
 def get_trilhas():
     claims = get_jwt()
-    if not claims.get('is_admin'):
+    if claims.get('funcao') != 'admin':
         return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
 
     trilhas = Trilha.query.all()
@@ -101,7 +152,7 @@ def get_trilhas():
 @jwt_required()
 def create_trilha():
     claims = get_jwt()
-    if not claims.get('is_admin'):
+    if claims.get('funcao') != 'admin':
         return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
 
     data = request.get_json()
@@ -129,7 +180,7 @@ def create_trilha():
 @jwt_required()
 def update_trilha(trilha_id):
     claims = get_jwt()
-    if not claims.get('is_admin'):
+    if claims.get('funcao') != 'admin':
         return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
 
     trilha = Trilha.query.get(trilha_id)
@@ -163,7 +214,7 @@ def update_trilha(trilha_id):
 @jwt_required()
 def delete_trilha(trilha_id):
     claims = get_jwt()
-    if not claims.get('is_admin'):
+    if claims.get('funcao') != 'admin':
         return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
     
     trilha = Trilha.query.get(trilha_id)
@@ -185,7 +236,7 @@ def delete_trilha(trilha_id):
 @jwt_required()
 def get_jogos():
     claims = get_jwt()
-    if not claims.get('is_admin'):
+    if claims.get('funcao') != 'admin':
         return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
     
     jogos = Jogo.query.all()
@@ -207,7 +258,7 @@ def get_jogos():
 @jwt_required()
 def create_jogo():
     claims = get_jwt()
-    if not claims.get('is_admin'):
+    if claims.get('funcao') != 'admin':
         return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
         
     data = request.get_json()
@@ -244,7 +295,7 @@ def create_jogo():
 @jwt_required()
 def update_jogo(jogo_id):
     claims = get_jwt()
-    if not claims.get('is_admin'):
+    if claims.get('funcao') != 'admin':
         return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
     
     jogo = Jogo.query.get(jogo_id)
@@ -287,7 +338,7 @@ def update_jogo(jogo_id):
 @jwt_required()
 def delete_jogo(jogo_id):
     claims = get_jwt()
-    if not claims.get('is_admin'):
+    if claims.get('funcao') != 'admin':
         return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
     
     jogo = Jogo.query.get(jogo_id)
@@ -311,7 +362,7 @@ def delete_jogo(jogo_id):
 @jwt_required()
 def get_professores():
     claims = get_jwt()
-    if not claims.get('is_admin'):
+    if claims.get('funcao') != 'admin':
         return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
 
     professores = Professor.query.all()
@@ -326,7 +377,7 @@ def get_professores():
 @jwt_required()
 def create_professor():
     claims = get_jwt()
-    if not claims.get('is_admin'):
+    if claims.get('funcao') != 'admin':
         return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
 
     data = request.get_json()
@@ -355,7 +406,7 @@ def create_professor():
 @jwt_required()
 def update_professor(professor_id):
     claims = get_jwt()
-    if not claims.get('is_admin'):
+    if claims.get('funcao') != 'admin':
         return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
 
     professor = Professor.query.get(professor_id)
@@ -391,7 +442,7 @@ def update_professor(professor_id):
 @jwt_required()
 def delete_professor(professor_id):
     claims = get_jwt()
-    if not claims.get('is_admin'):
+    if claims.get('funcao') != 'admin':
         return jsonify({"message": "Acesso negado: Apenas administradores podem acessar esta rota."}), 403
 
     professor = Professor.query.get(professor_id)
@@ -408,34 +459,15 @@ def delete_professor(professor_id):
 # ===========================================FIM DAS ROTAS DO ADM==================================================
 
 #============================================ROTAS DO PROFESSOR====================================================
-# ROTA DE LOGIN DO PROFESSOR - TESTADA E FUNCIONANDO
-@app.route('/api/login_professor', methods=['POST'])
-def login_professor():
-    email = request.json.get('email', None)
-    senha = request.json.get('senha', None)
-    
-    if not email or not senha:
-        return jsonify({"message": "Email e senha são obrigatórios para o login."}), 400
-
-    professor = Professor.query.filter_by(email=email).first()
-
-    if not professor or not professor.verificar_senha(senha): 
-        return jsonify({"message": "Email ou senha incorretos."}), 401 
-    
-    additional_claims = {"is_professor": True}
-
-    access_token = create_access_token(identity=str(professor.id), additional_claims=additional_claims)
-    return jsonify(access_token=access_token), 200
-
 # -------------------------CRUD COM AS SALAS--------------------------------
 
-# ROTA PARA VER AS SALAS - AINDA NÃO TESTADA
+# ROTA PARA VER AS SALAS - TESTADA E FUNCIONANDO
 @app.route('/api/salas', methods=['GET'])
 @jwt_required()
 def get_sala():
     claims = get_jwt()
-    if not claims.get('is_professor'):
-        return jsonify({"message": "Acesso negado: Apenas professores podem acessar esta rota."}), 403
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas Professores podem acessar esta rota."}), 403
 
     professor_id = get_jwt_identity()
 
@@ -453,13 +485,13 @@ def get_sala():
     
     return jsonify(salas_com_alunos), 200
 
-# ROTA PARA CRIAR SALAS - AINDA NÃO TESTADA - VALIDAR PARA TER NO MÍNIMO 1 TRILHA
+# ROTA PARA CRIAR SALAS - TESTADA E FUNCIONANDO
 @app.route('/api/salas', methods=['POST'])
 @jwt_required()
 def create_sala():
     claims = get_jwt()
-    if not claims.get('is_professor'):
-        return jsonify({"message": "Acesso negado: Apenas professores podem acessar esta rota."}), 403
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas Professores podem acessar esta rota."}), 403
         
     professor_id = get_jwt_identity()
     data = request.get_json()
@@ -483,21 +515,28 @@ def create_sala():
             return jsonify({"message": "Um ou mais IDs de trilha são inválidos."}), 400
 
         nova_sala = Sala(nome=nome_sala, professor_id=professor_id)
+
+        for trilha in trilhas:
+            nova_sala.trilhas.append(trilha)
+
         db.session.add(nova_sala)
         db.session.commit()
         
-        return jsonify({"message": "Sala criada com sucesso!", "sala": nova_sala.to_dict()}), 201
+        return jsonify({
+            "message": "Sala criada com sucesso!", 
+            "sala": nova_sala.to_dict()
+        }), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": f"Erro ao criar sala: {str(e)}"}), 500
 
-# ROTA PARA EDITAR UMA SALA - AINDA NÃO TESTADA
+# ROTA PARA EDITAR UMA SALA - TESTADA E FUNCIONANDO
 @app.route('/api/salas/<int:sala_id>', methods=['PUT'])
 @jwt_required()
 def update_sala(sala_id):
     claims = get_jwt()
-    if not claims.get('is_professor'):
-        return jsonify({"message": "Acesso negado: Apenas professores podem acessar esta rota."}), 403
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas Professores podem acessar esta rota."}), 403
 
     professor_id = get_jwt_identity()
     data = request.get_json()
@@ -527,13 +566,13 @@ def update_sala(sala_id):
         db.session.rollback()
         return jsonify({"message": f"Erro ao atualizar sala: {str(e)}"}), 500
 
-# ROTA PARA DELETAR UMA SALA - AINDA NÃO TESTADA - PRECISA DELETAR ALUNOS CONECTADOS
+# ROTA PARA DELETAR UMA SALA - TESTADA E FUNCIONANDO - PRECISA DELETAR ALUNOS CONECTADOS
 @app.route('/api/salas/<int:sala_id>', methods=['DELETE'])
 @jwt_required()
 def delete_sala(sala_id):
     claims = get_jwt()
-    if not claims.get('is_professor'):
-        return jsonify({"message": "Acesso negado: Apenas professores podem acessar esta rota."}), 403
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas Professores podem acessar esta rota."}), 403
 
     professor_id = get_jwt_identity()
 
@@ -552,11 +591,15 @@ def delete_sala(sala_id):
 
 # ----------------ROTAS DE GERENCIAMENTO COM OS ALUNOS----------------
 
-# ROTA PARA VER OS ALUNOS DA SALA - AINDA NÃO TESTADA
+# ROTA PARA VER OS ALUNOS DA SALA - TESTADA E FUNCIONANDO
 @app.route('/api/salas/<int:sala_id>/alunos', methods=['GET'])
+@jwt_required()
 def get_alunos_da_sala(sala_id):
-    professor_id = get_jwt_identity()
+    claims = get_jwt()
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas Professores podem acessar esta rota."}), 403
 
+    professor_id = get_jwt_identity()
     # 1. Verifica se a sala existe E se ela pertence ao professor logado
     sala = Sala.query.filter_by(id=sala_id, professor_id=professor_id).first()
     if not sala:
@@ -571,10 +614,20 @@ def get_alunos_da_sala(sala_id):
 
     return jsonify(alunos_list), 200
 
-# ROTA PARA CRIAR UM ALUNO - AINDA NÃO TESTADA
+# ROTA PARA CRIAR UM ALUNO - TESTADA E FUNCIONANDO
 @app.route('/api/salas/<int:sala_id>/alunos', methods=['POST'])
+@jwt_required()
 def create_aluno_na_sala(sala_id):
-    professor_id = get_jwt_identity()
+    claims = get_jwt()
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas professores podem acessar esta rota."}), 403
+    professor_id_str = get_jwt_identity()
+
+    try:
+        professor_id = int(professor_id_str)
+    except ValueError:
+        # Isso pode acontecer se o token for manipulado ou não contiver um ID válido.
+        return jsonify({"message": "ID de usuário no token inválido."}), 401
     data = request.get_json()
 
     nome = data.get('nome')
@@ -595,7 +648,7 @@ def create_aluno_na_sala(sala_id):
         return jsonify({"message": "Email já cadastrado."}), 409 # Conflict
 
     # 3. Cria o novo aluno e define a senha
-    novo_aluno = Aluno(nome=nome, email=email)
+    novo_aluno = Aluno(nome=nome, email=email, sala_id=sala_id)
     novo_aluno.senha = senha # O setter do modelo fará o hash
 
     try:
@@ -612,9 +665,13 @@ def create_aluno_na_sala(sala_id):
         db.session.rollback()
         return jsonify({"message": f"Erro ao criar aluno: {str(e)}"}), 500
 
-# ROTA PARA EDITAR ALUNO - AINDA NÃO TESTADA
+# ROTA PARA EDITAR ALUNO - TESTADA E FUNCIONANDO
 @app.route('/api/salas/<int:sala_id>/alunos/<int:aluno_id>', methods=['PUT'])
+@jwt_required()
 def update_aluno_na_sala(sala_id, aluno_id):
+    claims = get_jwt()
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas Professores podem acessar esta rota."}), 403
     professor_id = get_jwt_identity()
     data = request.get_json()
 
@@ -655,9 +712,13 @@ def update_aluno_na_sala(sala_id, aluno_id):
         db.session.rollback()
         return jsonify({"message": f"Erro ao atualizar aluno: {str(e)}"}), 500
 
-# ROTA PARA DELETAR ALUNO - AINDA NÃO TESTADA
+# ROTA PARA DELETAR ALUNO - TESTADA E FUNCIONANDO
 @app.route('/api/salas/<int:sala_id>/alunos/<int:aluno_id>', methods=['DELETE'])
+@jwt_required()
 def delete_aluno_da_sala(sala_id, aluno_id):
+    claims = get_jwt()
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas Professores podem acessar esta rota."}), 403
     professor_id = get_jwt_identity()
 
     # 1. Verifica se a sala e o aluno existem e se o professor tem permissão
@@ -683,9 +744,13 @@ def delete_aluno_da_sala(sala_id, aluno_id):
         db.session.rollback()
         return jsonify({"message": f"Erro ao deletar aluno: {str(e)}"}), 500
 
-# ROTA PARA VER PERFIL DO ALUNO - AINDA NÃO TESTADA
+# ROTA PARA VER PERFIL DO ALUNO - TESTADA E FUNCIONANDO
 @app.route('/api/alunos/<int:aluno_id>', methods=['GET'])
+@jwt_required()
 def get_perfil_aluno(aluno_id):
+    claims = get_jwt()
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas Professores podem acessar esta rota."}), 403
     professor_id = get_jwt_identity()
 
     # 1. Encontra o aluno pelo ID
@@ -709,12 +774,15 @@ def get_perfil_aluno(aluno_id):
     # 3. Retorna os dados do aluno e as trilhas da sala a que ele pertence
     # Como um aluno pode estar em várias salas, vamos buscar todas as salas e suas trilhas
     salas_do_aluno = []
-    for sala in aluno.salas:
+
+    if aluno.sala:
+        sala = aluno.sala
         salas_do_aluno.append({
             'id': sala.id,
             'nome': sala.nome,
-            'trilhas': [trilha.to_dict() for trilha in sala.trilhas]
-        })
+            # Você está assumindo que 'sala' tem uma propriedade 'trilhas'
+            'trilhas': [trilha.to_dict() for trilha in sala.trilhas] 
+    })
 
     perfil_do_aluno = aluno.to_dict()
     perfil_do_aluno['salas'] = salas_do_aluno
@@ -723,65 +791,121 @@ def get_perfil_aluno(aluno_id):
 
 # ROTA PARA VER RELATÓRIO DO ALUNO POR TRILHA - AINDA NÃO TESTADA
 @app.route('/api/alunos/<int:aluno_id>/historico/trilha/<int:trilha_id>', methods=['GET'])
+@jwt_required()
 def get_historico_aluno_por_trilha(aluno_id, trilha_id):
-    professor_id = get_jwt_identity()
+    claims = get_jwt()
+    
+    # 1. VERIFICAÇÃO DE FUNÇÃO E ID DO PROFESSOR
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas Professores podem acessar esta rota."}), 403
+    
+    professor_id_str = get_jwt_identity()
+    try:
+        professor_id = int(professor_id_str)
+    except ValueError:
+        return jsonify({"message": "ID de professor no token inválido."}), 401
 
-    # 1. Verifica se o aluno existe e se ele pertence a uma das salas do professor
+    # 2. VERIFICAÇÃO DE AUTORIZAÇÃO: O professor pode ver este aluno?
     aluno = Aluno.query.get(aluno_id)
-    if not aluno:
-        return jsonify({"message": "Aluno não encontrado."}), 404
-
-    # Busca todas as salas do professor
     professor = Professor.query.get(professor_id)
+    
+    if not aluno or not professor:
+        return jsonify({"message": "Aluno ou Professor não encontrado."}), 404
+
+    # Busca todas as salas do professor e verifica se o aluno está em alguma delas
     professor_possui_aluno = False
-    for sala in professor.salas:
-        if aluno in sala.alunos:
+    aluno_sala = aluno.sala
+
+    if aluno_sala:
+        # Verifica se o ID do professor logado é o mesmo ID do professor dono da sala do aluno
+        if aluno_sala.professor_id == professor.id:
             professor_possui_aluno = True
-            break
     
     if not professor_possui_aluno:
         return jsonify({"message": "Você não tem permissão para acessar o histórico deste aluno."}), 403
 
-    # 2. Verifica se a trilha existe e se ela está associada a alguma sala do aluno
+    # 3. VERIFICAÇÃO DE TRILHA
     trilha = Trilha.query.get(trilha_id)
     if not trilha:
         return jsonify({"message": "Trilha não encontrada."}), 404
-        
-    # Esta verificação é opcional, mas evita que um professor veja o desempenho em uma trilha que
-    # não foi associada a nenhuma sala do aluno.
-    aluno_tem_acesso_a_trilha = False
-    for sala in aluno.salas:
-        if trilha in sala.trilhas:
-            aluno_tem_acesso_a_trilha = True
-            break
-            
-    if not aluno_tem_acesso_a_trilha:
-         return jsonify({"message": "Esta trilha não está disponível para este aluno através de nenhuma das suas salas."}), 403
+    
+    if aluno_sala and trilha not in aluno_sala.trilhas:
+        return jsonify({"message": "Esta trilha não está disponível para este aluno através de nenhuma das suas salas."}), 403
 
-    # 3. Busca os desempenhos do aluno na trilha
+    # CORREÇÃO CRÍTICA: Se Aluno tem relação 1:N com Sala (aluno.sala), a lógica de trilha deve mudar.
+    # Assumiremos que o professor só está interessado no desempenho que está na sala dele.
+    
+    # 4. BUSCA E CONSOLIDAÇÃO DOS DESEMPENHOS
     desempenhos = DesempenhoJogo.query.filter_by(aluno_id=aluno_id, trilha_id=trilha_id)\
-                                     .options(db.joinedload(DesempenhoJogo.jogo))\
+                                     .options(joinedload(DesempenhoJogo.jogo))\
                                      .order_by(DesempenhoJogo.data_hora.desc())\
                                      .all()
+    
+    # Se não houver desempenho, retorne uma resposta vazia, mas válida
+    if not desempenhos:
+        return jsonify({
+            "aluno_nome": aluno.nome,
+            "trilha_nome": trilha.nome,
+            "estatisticas": {
+                "tentativas_totais": 0,
+                "passou_trilha": False,
+                "acertos_consolidados": [],
+                "erros_consolidados": []
+            }
+        }), 200
 
-    historico_data = []
+    # Lógica de Consolidação para o Relatório:
+    tentativas_totais = len(desempenhos)
+    
+    # Para saber se o aluno 'passou na trilha', contamos quantos jogos ele passou:
+    # 1. Agrupamos os desempenhos pelo ID do Jogo (considerando a tentativa mais recente para cada jogo, se for 1 tentativa/jogo)
+    #    OU simplesmente contamos os registros 'passou=True' e comparamos com o número total de jogos na trilha.
+    
+    # Vamos contar os registros distintos de jogos que ele passou (passou=True):
+    jogos_passados = set()
     for d in desempenhos:
-        jogo_nome = d.jogo.nome if d.jogo else f"Jogo ID {d.jogo_id}"
-        historico_data.append({
-            "id": d.id,
-            "jogo_id": d.jogo_id,
-            "jogo_nome": jogo_nome,
-            "data_hora": d.data_hora.isoformat(),
-            "passou": d.passou,
-            "acertos": d.acertos,
-            "erros": d.erros
-        })
-        
-    return jsonify(historico_data), 200
+        if d.passou:
+            jogos_passados.add(d.jogo_id)
+            
+    # Para verificar se "passou_trilha", precisamos do número total de jogos na trilha.
+    # ASSUMIMOS que o número de jogos passados (len(jogos_passados)) deve ser 4 para passar, conforme sua regra.
+    
+    # Se a trilha tem 4 jogos, a regra de 'passou_trilha' é:
+    total_jogos_na_trilha = len(trilha.jogos) # Pega do modelo Trilha (relação 'jogos')
+    passou_trilha = len(jogos_passados) >= total_jogos_na_trilha # TRUE se ele passou em todos os jogos
+
+    # Consolidação de Acertos e Erros (Juntando todas as listas de JSON)
+    acertos_consolidados = []
+    erros_consolidados = []
+    
+    for d in desempenhos:
+        # d.acertos e d.erros são listas (JSON do banco)
+        if isinstance(d.acertos, list):
+            acertos_consolidados.extend(d.acertos)
+        if isinstance(d.erros, list):
+            erros_consolidados.extend(d.erros)
+
+    # 5. RETORNA O RELATÓRIO CONSOLIDADO
+    return jsonify({
+        "aluno_nome": aluno.nome,
+        "trilha_nome": trilha.nome,
+        "estatisticas": {
+            "tentativas_totais": tentativas_totais,
+            "passou_trilha": passou_trilha,
+            "acertos_consolidados": acertos_consolidados,
+            "erros_consolidados": erros_consolidados
+        },
+        # Mantemos os dados brutos para que o frontend possa criar gráficos
+        "detalhes_desempenho_bruto": [d.to_dict() for d in desempenhos]
+    }), 200
 
 # ROTA PARA VER ANALISE DA IA DO DESEMPENHO DO ALUNO - AINDA NÃO TESTADA
 @app.route('/api/alunos/<int:aluno_id>/historico/trilha/<int:trilha_id>/analise-ia', methods=['GET'])
+@jwt_required()
 def get_analise_ia(aluno_id, trilha_id):
+    claims = get_jwt()
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas Professores podem acessar esta rota."}), 403
     professor_id = get_jwt_identity()
 
     # 1. Validação de permissão
@@ -838,100 +962,152 @@ def get_analise_ia(aluno_id, trilha_id):
 
 # =================================ROTAS DO ALUNO================================================
 
-# ROTA DE LOGIN DO ALUNO - AINDA NÃO TESTADA - DEVE RENDERIZAR A TELA DA SALA NA SALA QUE ELE FOI MATRICULADO
-@app.route('/api/login_aluno', methods=['POST'])
-def login_aluno():
-    email = request.json.get('email', None)
-    senha = request.json.get('senha', None)
-
-    aluno = Aluno.query.filter_by(email=email).first()
-
-    if not aluno or not aluno.verificar_senha(senha): 
-        return jsonify({"message": "Email ou senha incorretos."}), 401 
-
-    access_token = create_access_token(identity=f"aluno_{aluno.id}")
-    return jsonify(access_token=access_token), 200
-
-# ROTA PARA VER AS TRILHAS DISPONIVEIS NA SALA, PELO ALUNO - AINDA NÃO TESTADA
+# ROTA PARA VER AS TRILHAS DISPONIVEIS NA SALA, PELO ALUNO - TESTADA E FUNCIONANDO
 @app.route('/api/aluno/trilhas', methods=['GET'])
+@jwt_required()
 def get_aluno_trilhas():
-    # Obtém a identidade do aluno do token JWT
-    identity = get_jwt_identity()
-    if not identity.startswith('aluno_'):
-        return jsonify({"message": "Acesso negado: Apenas alunos podem acessar esta rota."}), 403
+    claims = get_jwt()
+    
+    # 1. VALIDAÇÃO DE FUNÇÃO: Garante que apenas ALUNOS acessem esta rota.
+    if claims.get('funcao') != 'aluno':
+        return jsonify({"message": "Acesso negado: Apenas Alunos podem acessar esta rota."}), 403
 
-    aluno_id = int(identity.split('_')[1])
+    # 2. EXTRAÇÃO DO ID: O identity agora é apenas o ID (string)
+    identity = get_jwt_identity()
+    
+    try:
+        # Tenta converter o ID (que é o identity) para inteiro
+        aluno_id = int(identity)
+    except ValueError:
+        return jsonify({"message": "ID de aluno no token inválido."}), 401
+
+    # 3. Encontra o aluno no banco
     aluno = Aluno.query.get(aluno_id)
 
     if not aluno:
         return jsonify({"message": "Aluno não encontrado."}), 404
 
-    # Busca a primeira sala do aluno
-    sala = aluno.salas.first()
+    # 4. Busca a sala do aluno (Usando .sala no singular, conforme o modelo 1:N)
+    sala = aluno.sala
+    
     if not sala:
-        return jsonify({"message": "Aluno não está associado a nenhuma sala."}), 404
+        return jsonify({"message": "Você não está associado a nenhuma sala."}), 404
 
+    # 5. Busca as trilhas da sala
+    # Assumindo que a sala tem uma relação 'trilhas' que retorna uma lista
     trilhas_da_sala = [t.to_dict() for t in sala.trilhas]
     
     return jsonify({
+        "sala_id": sala.id,
         "sala_nome": sala.nome,
         "trilhas": trilhas_da_sala
     }), 200
 
 # ROTA PARA VER OS JOGOS DE UMA TRILHA, PELO ALUNO - AINDA NÃO TESTADA
 @app.route('/api/trilhas/<int:trilha_id>/jogos', methods=['GET'])
+@jwt_required()
 def get_jogos_da_trilha(trilha_id):
-    # Verifica se a trilha existe
-    trilha = Trilha.query.get(trilha_id)
-    if not trilha:
-        return jsonify({"message": "Trilha não encontrada."}), 404
+    claims = get_jwt()
+    
+    # 1. VALIDAÇÃO DE FUNÇÃO: Garante que apenas ALUNOS acessem esta rota.
+    if claims.get('funcao') != 'aluno':
+        return jsonify({"message": "Acesso negado: Apenas Alunos podem acessar esta rota."}), 403
 
+    # 2. ENCONTRAR O ALUNO LOGADO
+    try:
+        aluno_id = int(get_jwt_identity())
+    except ValueError:
+        return jsonify({"message": "ID de aluno no token inválido."}), 401
+
+    aluno = Aluno.query.get(aluno_id)
+    if not aluno:
+        return jsonify({"message": "Aluno não encontrado."}), 404
+
+    # 3. VERIFICAR AUTORIZAÇÃO: O aluno tem acesso a esta trilha?
+    
+    # Obtém a sala do aluno (assumindo 1:N com 'aluno.sala')
+    sala_do_aluno = aluno.sala
+    
+    if not sala_do_aluno:
+        return jsonify({"message": "Você não está associado a nenhuma sala com trilhas disponíveis."}), 403
+
+    # Verifica se o trilha_id está na lista de trilhas da sala do aluno
+    trilha_valida_para_aluno = False
+    
+    # Percorre a coleção de trilhas da sala (sala_do_aluno.trilhas)
+    for trilha in sala_do_aluno.trilhas:
+        if trilha.id == trilha_id:
+            trilha_valida_para_aluno = True
+            break
+            
+    if not trilha_valida_para_aluno:
+        return jsonify({"message": "Trilha indisponível: Esta trilha não está associada à sua sala."}), 403 # Forbidden
+
+    # 4. ENCONTRAR A TRILHA (já sabemos que ela existe e está na sala)
+    trilha = Trilha.query.get(trilha_id)
+    
+    # 5. RETORNA OS JOGOS
     # Como a relação já foi definida no modelo, é fácil acessar os jogos
     jogos_da_trilha = [j.to_dict() for j in trilha.jogos]
     
     return jsonify({
+        "trilha_id": trilha.id,
         "trilha_nome": trilha.nome,
         "jogos": jogos_da_trilha
     }), 200
 
 # ROTA PARA SALVAR DESEMPENHO DO ALUNO - AINDA NÃO TESTADA
 @app.route('/api/desempenho', methods=['POST'])
+@jwt_required()
 def save_desempenho():
-    # 1. Obtém a identidade do aluno logado
-    identity = get_jwt_identity()
-    if not identity.startswith('aluno_'):
-        return jsonify({"message": "Acesso negado: Apenas alunos podem salvar o desempenho."}), 403
+    claims = get_jwt()
 
-    aluno_id = int(identity.split('_')[1])
+    if claims.get('funcao') != 'aluno':
+        return jsonify({"message": "Acesso negado: Apenas Alunos podem salvar desempenho."}), 403
+    
+    # 2. EXTRAÇÃO DE ID: Pega o ID puro do token
+    identity = get_jwt_identity()
+    try:
+        aluno_id = int(identity)
+    except ValueError:
+        return jsonify({"message": "ID de aluno no token inválido."}), 401
+    
     aluno = Aluno.query.get(aluno_id)
     if not aluno:
         return jsonify({"message": "Aluno não encontrado."}), 404
 
-    # 2. Recebe os dados do corpo da requisição
+    # 3. Recebe os dados
     data = request.get_json()
     jogo_id = data.get('jogo_id')
     trilha_id = data.get('trilha_id')
-    passou = data.get('passou')
-    acertos = data.get('acertos')
-    erros = data.get('erros')
+    passou = data.get('passou')          
+    
+    # Campos que agora aceitam LISTAS/JSON
+    acertos = data.get('acertos', [])    # Garante que seja pelo menos uma lista vazia
+    erros = data.get('erros', [])        # Garante que seja pelo menos uma lista vazia
 
-    # Validação inicial dos dados
-    if not all([jogo_id, trilha_id, passou is not None, acertos is not None, erros is not None]):
-        return jsonify({"message": "Dados incompletos. Jogo, trilha, resultado e acertos/erros são obrigatórios."}), 400
+    # 4. Validação inicial dos dados
+    # A validação agora checa se acertos e erros são listas, e se os IDs e 'passou' estão presentes.
+    if not all([jogo_id, trilha_id, passou is not None, isinstance(acertos, list), isinstance(erros, list)]):
+         return jsonify({"message": "Dados incompletos ou formatos inválidos. Verifique jogo, trilha, resultado e se acertos/erros são listas."}), 400
 
-    # 3. Validação adicional: garante que o aluno, jogo e trilha existem
+    # 5. Encontra a sala do aluno para associar o desempenho
+    sala_do_aluno = aluno.sala # Usando a relação singular (1:N)
+    if not sala_do_aluno:
+        return jsonify({"message": "Você não está associado a nenhuma sala. Não é possível salvar o desempenho."}), 404
+
+    # 6. Validação adicional: garante que o jogo e trilha existem e são válidos
     jogo = Jogo.query.get(jogo_id)
     trilha = Trilha.query.get(trilha_id)
+    
     if not jogo or not trilha:
         return jsonify({"message": "Jogo ou trilha não encontrados."}), 404
+        
+    # VERIFICAÇÃO DE AUTORIZAÇÃO: Garante que a trilha é da sala do aluno
+    if trilha not in sala_do_aluno.trilhas:
+        return jsonify({"message": "Trilha não pertence à sua sala. Desempenho não pode ser salvo."}), 403
 
-    # 4. Encontra a sala do aluno para associar o desempenho
-    # Como um aluno pode estar em várias salas, vamos buscar a primeira
-    sala_do_aluno = aluno.salas.first()
-    if not sala_do_aluno:
-        return jsonify({"message": "Aluno não está em nenhuma sala."}), 404
-
-    # 5. Salva o desempenho no banco de dados
+    # 7. Salva o desempenho no banco de dados
     try:
         novo_desempenho = DesempenhoJogo(
             aluno_id=aluno.id,
@@ -939,8 +1115,8 @@ def save_desempenho():
             trilha_id=trilha.id,
             sala_id=sala_do_aluno.id,
             passou=passou,
-            acertos=acertos,
-            erros=erros
+            acertos=acertos,  # SQLAlchemy salvará esta lista como JSON
+            erros=erros       # SQLAlchemy salvará esta lista como JSON
         )
         db.session.add(novo_desempenho)
         db.session.commit()
@@ -949,16 +1125,6 @@ def save_desempenho():
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": f"Erro ao salvar desempenho: {str(e)}"}), 500
-
-
-    current_aluno_id = get_jwt_identity() 
-
-    aluno = Aluno.query.get(current_aluno_id)
-    if not aluno:
-        return jsonify({"message": "Aluno não encontrado (via token)."}), 404
-
-    return jsonify({"message": "Bem-vindo ao seu perfil!", "aluno": aluno.to_dict()}), 200
-
 
 if __name__ == '__main__':
     app.run(debug=True) # Mude debug=False em produção

@@ -447,13 +447,12 @@ def get_sala():
     salas_com_alunos = []
     for sala in salas:
         sala_dict = sala.to_dict()
-        # Carrega os alunos da sala
         sala_dict['alunos'] = [aluno.to_dict() for aluno in sala.alunos]
         salas_com_alunos.append(sala_dict)
     
     return jsonify(salas_com_alunos), 200
 
-# ROTA PARA CRIAR SALAS - AINDA NÃO TESTADA - VALIDAR PARA TER NO MÍNIMO 1 TRILHA
+# ROTA PARA CRIAR SALAS - TESTADA E FUNCIONANDO - VALIDAR PARA TER NO MÍNIMO 1 TRILHA
 @app.route('/api/salas', methods=['POST'])
 @jwt_required()
 def create_sala():
@@ -483,10 +482,17 @@ def create_sala():
             return jsonify({"message": "Um ou mais IDs de trilha são inválidos."}), 400
 
         nova_sala = Sala(nome=nome_sala, professor_id=professor_id)
+
+        for trilha in trilhas:
+            nova_sala.trilhas.append(trilha)
+
         db.session.add(nova_sala)
         db.session.commit()
         
-        return jsonify({"message": "Sala criada com sucesso!", "sala": nova_sala.to_dict()}), 201
+        return jsonify({
+            "message": "Sala criada com sucesso!", 
+            "sala": nova_sala.to_dict()
+        }), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": f"Erro ao criar sala: {str(e)}"}), 500

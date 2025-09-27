@@ -10,7 +10,6 @@ sala_trilha_association = db.Table('sala_trilha',
     db.Column('trilha_id', db.Integer, db.ForeignKey('trilha.id'))
 )
 
-
 class Admin(db.Model):
     __tablename__ = 'admin'
     id = db.Column(db.Integer, primary_key=True)
@@ -45,7 +44,7 @@ class Aluno(db.Model):
     nome = db.Column(db.String(80), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     senha_hash = db.Column(db.String(255), nullable=False, name='senha')
-    sala_id = db.Column(db.Integer, db.ForeignKey('sala.id'), nullable=False)
+    sala_id = db.Column(db.Integer, db.ForeignKey('sala.id', ondelete='CASCADE'), nullable=False)
 
     def __repr__(self):
         return f'<Aluno {self.nome}>'

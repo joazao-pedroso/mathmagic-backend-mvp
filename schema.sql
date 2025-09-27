@@ -53,18 +53,18 @@ CREATE TABLE IF NOT EXISTS `sala` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `aluno` (
-  `id` INT NOT NULL AUTO_INCREMENT,
-  `nome` VARCHAR(80) NOT NULL,
-  `email` VARCHAR(120) NOT NULL UNIQUE,
-  `senha` VARCHAR(255) NOT NULL,
-  `sala_id` INT,
-  PRIMARY KEY (`id`),
-  INDEX `fk_aluno_sala_idx` (`sala_id` ASC) VISIBLE,
-  CONSTRAINT `fk_aluno_sala`
-    FOREIGN KEY (`sala_id`)
-    REFERENCES `sala` (`id`)
-    ON DELETE SET NULL
-    ON UPDATE CASCADE
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `nome` VARCHAR(80) NOT NULL,
+  `email` VARCHAR(120) NOT NULL UNIQUE,
+  `senha` VARCHAR(255) NOT NULL,
+  `sala_id` INT NOT NULL,
+  PRIMARY KEY (`id`),
+  INDEX `fk_aluno_sala_idx` (`sala_id` ASC) VISIBLE,
+  CONSTRAINT `fk_aluno_sala`
+  FOREIGN KEY (`sala_id`)
+  REFERENCES `sala` (`id`)
+  ON DELETE CASCADE
+  ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `sala_trilha` (

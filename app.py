@@ -9,6 +9,7 @@ from datetime import timedelta
 from flask_migrate import Migrate
 from flask_cors import CORS
 from sqlalchemy.orm import joinedload
+from sqlalchemy import or_
 
 import google.generativeai as genai
 import os
@@ -132,6 +133,31 @@ def login():
     return jsonify(access_token=access_token), 200
 #-------------------CRUD COM AS TRILHAS---------------------
 
+# ROTA PARA PESQUISAR TRILHAS POR NOME - NÃO TESTADA
+@app.route('/api/admin/trilhas/search', methods=['GET'])
+@jwt_required()
+def search_trilhas_admin():
+    claims = get_jwt()
+    if claims.get('funcao') != 'admin':
+        return jsonify({"message": "Acesso negado: Apenas administradores podem pesquisar trilhas."}), 403
+
+    # Obtém o termo de pesquisa da query string (ex: /search?query=subtracao)
+    search_term = request.args.get('query', None)
+
+    if not search_term:
+        # Se não houver termo, retorna todas as trilhas ou um erro
+        return jsonify({"message": "O termo de pesquisa 'query' é obrigatório."}), 400
+
+    # Adiciona o wildcard (%) para busca parcial e case-insensitive
+    termo_like = f"%{search_term}%"
+    
+    trilhas = Trilha.query.filter(Trilha.nome.ilike(termo_like)).all()
+
+    if not trilhas:
+        return jsonify({"message": f"Nenhuma trilha encontrada com o nome: '{search_term}'"}), 404
+
+    return jsonify([t.to_dict() for t in trilhas]), 200
+
 # ROTA PARA VER AS TRILHAS - TESTADA E FUNCIONANDO
 @app.route('/api/trilhas', methods=['GET'])
 @jwt_required()
@@ -230,6 +256,29 @@ def delete_trilha(trilha_id):
         return jsonify({"message": f"Erro ao deletar trilha: {str(e)}"}), 500
 
 # --------------------ROTAS DE CRUD DE JOGOS-------------------
+
+# ROTA DE PESQUISAR JOGOS POR NOME - NÃO TESTADA
+@app.route('/api/admin/jogos/search', methods=['GET'])
+@jwt_required()
+def search_jogos_admin():
+    claims = get_jwt()
+    if claims.get('funcao') != 'admin':
+        return jsonify({"message": "Acesso negado: Apenas administradores podem pesquisar jogos."}), 403
+
+    search_term = request.args.get('query', None)
+
+    if not search_term:
+        return jsonify({"message": "O termo de pesquisa 'query' é obrigatório."}), 400
+
+    termo_like = f"%{search_term}%"
+    
+    # Busca jogos pelo nome, ignorando maiúsculas/minúsculas
+    jogos = Jogo.query.filter(Jogo.nome.ilike(termo_like)).all()
+
+    if not jogos:
+        return jsonify({"message": f"Nenhum jogo encontrado com o nome: '{search_term}'"}), 404
+
+    return jsonify([j.to_dict() for j in jogos]), 200
 
 # ROTA DE VER OS JOGOS - TESTADA E FUNCIONANDO
 @app.route('/api/jogos', methods=['GET'])
@@ -357,6 +406,34 @@ def delete_jogo(jogo_id):
 
 # ------------------ROTAS DE CRUD DE PROFESSORES----------------
 
+#ROTA DE PESQUISAR PROFESSORES POR NOME - NÃO TESTADA
+@app.route('/api/admin/professores/search', methods=['GET'])
+@jwt_required()
+def search_professores_admin():
+    claims = get_jwt()
+    if claims.get('funcao') != 'admin':
+        return jsonify({"message": "Acesso negado: Apenas administradores podem pesquisar professores."}), 403
+
+    search_term = request.args.get('query', None)
+
+    if not search_term:
+        return jsonify({"message": "O termo de pesquisa 'query' é obrigatório."}), 400
+
+    termo_like = f"%{search_term}%"
+    
+    # Usa 'or_' para buscar o termo no nome OU no email
+    professores = Professor.query.filter(
+        or_(
+            Professor.nome.ilike(termo_like),
+            Professor.email.ilike(termo_like)
+        )
+    ).all()
+
+    if not professores:
+        return jsonify({"message": f"Nenhum professor encontrado com o termo: '{search_term}'"}), 404
+
+    return jsonify([p.to_dict() for p in professores]), 200
+
 # ROTA DE VER PROFESSORES - TESTADA E FUNCIONANDO
 @app.route('/api/professores', methods=['GET'])
 @jwt_required()
@@ -460,6 +537,52 @@ def delete_professor(professor_id):
 
 #============================================ROTAS DO PROFESSOR====================================================
 # -------------------------CRUD COM AS SALAS--------------------------------
+
+#ROTAS PARA PESQUISAR SALAS POR NOME - NÃO TESTADA
+@app.route('/api/professor/salas/search', methods=['GET'])
+@jwt_required()
+def search_salas_professor():
+    claims = get_jwt()
+    
+    # 1. VALIDAÇÃO DE FUNÇÃO
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas professores podem pesquisar salas."}), 403
+
+    # 2. EXTRAÇÃO DO ID DO PROFESSOR LOGADO
+    professor_id_str = get_jwt_identity()
+    try:
+        professor_id = int(professor_id_str)
+    except ValueError:
+        return jsonify({"message": "ID de professor no token inválido."}), 401
+    
+    # 3. OBTÉM O TERMO DE PESQUISA
+    search_term = request.args.get('query', None)
+
+    if not search_term:
+        # Se não houver termo de pesquisa, o professor pode querer ver todas as suas salas
+        # Mantenha o filtro de professor_id para segurança
+        salas = Sala.query.filter_by(professor_id=professor_id).all()
+        
+        if not salas:
+            return jsonify({"message": "Você não possui nenhuma sala cadastrada."}), 404
+        
+        return jsonify([s.to_dict() for s in salas]), 200
+
+    termo_like = f"%{search_term}%"
+    
+    # 4. EXECUTA A BUSCA COM FILTRO DE AUTORIZAÇÃO
+    
+    # Busca salas cujo nome contenha o termo
+    # E que pertençam ao professor logado (professor_id)
+    salas = Sala.query.filter(
+        Sala.professor_id == professor_id, # Filtro de Autorização: Sala pertence ao professor
+        Sala.nome.ilike(termo_like)       # Filtro de Pesquisa: Nome da sala contém o termo
+    ).all()
+
+    if not salas:
+        return jsonify({"message": f"Nenhuma sala encontrada com o termo: '{search_term}'"}), 404
+
+    return jsonify([s.to_dict() for s in salas]), 200
 
 # ROTA PARA VER AS SALAS - TESTADA E FUNCIONANDO
 @app.route('/api/salas', methods=['GET'])
@@ -589,6 +712,60 @@ def delete_sala(sala_id):
         return jsonify({"message": f"Erro ao deletar sala: {str(e)}"}), 500
 
 # ----------------ROTAS DE GERENCIAMENTO COM OS ALUNOS----------------
+
+#ROTA PARA PESQUISAR ALUNOS POR NOME - NÃO TESTADA
+@app.route('/api/professor/alunos/search', methods=['GET'])
+@jwt_required()
+def search_alunos_professor():
+    claims = get_jwt()
+    
+    # 1. VALIDAÇÃO DE FUNÇÃO
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas professores podem pesquisar alunos."}), 403
+
+    # 2. EXTRAÇÃO DO ID DO PROFESSOR LOGADO
+    professor_id_str = get_jwt_identity()
+    try:
+        professor_id = int(professor_id_str)
+    except ValueError:
+        return jsonify({"message": "ID de professor no token inválido."}), 401
+    
+    # 3. OBTÉM O TERMO DE PESQUISA
+    search_term = request.args.get('query', None)
+
+    if not search_term:
+        return jsonify({"message": "O termo de pesquisa 'query' é obrigatório."}), 400
+
+    termo_like = f"%{search_term}%"
+    
+    # 4. ENCONTRA O PROFESSOR E SUAS SALAS
+    professor = Professor.query.get(professor_id)
+    if not professor:
+        return jsonify({"message": "Professor não encontrado."}), 404
+    
+    # 5. EXECUTA A BUSCA COM FILTRO DE AUTORIZAÇÃO
+    
+    # Primeiro, identificamos os IDs de todas as salas pertencentes a este professor
+    # Assumindo que 'professor.salas' é uma relação que lista as salas dele.
+    sala_ids = [sala.id for sala in professor.salas]
+    
+    if not sala_ids:
+        return jsonify({"message": "Você não possui salas cadastradas para realizar a pesquisa."}), 404
+
+    # Busca alunos cujo nome OU email contenha o termo
+    # E que estejam em QUALQUER uma das salas do professor (sala_id IN [IDs])
+    alunos = Aluno.query.filter(
+        Aluno.sala_id.in_(sala_ids), # Filtro de Autorização: Aluno pertence a uma sala do professor
+        or_(
+            Aluno.nome.ilike(termo_like),
+            Aluno.email.ilike(termo_like)
+        )
+    ).all()
+
+    if not alunos:
+        return jsonify({"message": f"Nenhum aluno encontrado nas suas salas com o termo: '{search_term}'"}), 404
+
+    return jsonify([a.to_dict() for a in alunos]), 200
 
 # ROTA PARA VER OS ALUNOS DA SALA - TESTADA E FUNCIONANDO
 @app.route('/api/salas/<int:sala_id>/alunos', methods=['GET'])
@@ -960,6 +1137,64 @@ def get_analise_ia(aluno_id, trilha_id):
 # =====================================FIM DAS ROTAS DO PROFESSOR======================================
 
 # =================================ROTAS DO ALUNO================================================
+
+# ROTA PARA PESQUISAR AS TRILHAS POR NOME - NÃO TESTADA
+@app.route('/api/aluno/trilhas/search', methods=['GET'])
+@jwt_required()
+def search_trilhas_aluno():
+    claims = get_jwt()
+    
+    # 1. VALIDAÇÃO DE FUNÇÃO
+    if claims.get('funcao') != 'aluno':
+        return jsonify({"message": "Acesso negado: Apenas alunos podem pesquisar trilhas."}), 403
+
+    # 2. EXTRAÇÃO DO ID DO ALUNO LOGADO E OBTER OBJETO
+    identity = get_jwt_identity()
+    try:
+        aluno_id = int(identity)
+    except ValueError:
+        return jsonify({"message": "ID de aluno no token inválido."}), 401
+    
+    aluno = Aluno.query.get(aluno_id)
+    if not aluno:
+        return jsonify({"message": "Aluno não encontrado."}), 404
+    
+    # Obtém a sala do aluno (relação singular)
+    sala_do_aluno = aluno.sala
+    
+    if not sala_do_aluno:
+        return jsonify({"message": "Você não está associado a nenhuma sala com trilhas."}), 404
+
+    # 3. OBTÉM O TERMO DE PESQUISA
+    search_term = request.args.get('query', None)
+    
+    # Se não houver termo de pesquisa, o aluno pode querer ver todas as trilhas disponíveis na sua sala
+    if not search_term:
+        trilhas = sala_do_aluno.trilhas
+        
+        if not trilhas:
+            return jsonify({"message": "Sua sala não possui trilhas cadastradas."}), 404
+        
+        return jsonify([t.to_dict() for t in trilhas]), 200
+
+    termo_like = f"%{search_term}%"
+    
+    # 4. FILTRO DE PESQUISA E AUTORIZAÇÃO
+
+    # Obtém os IDs das trilhas associadas à sala do aluno
+    trilhas_na_sala_ids = [t.id for t in sala_do_aluno.trilhas]
+    
+    # Busca trilhas cujo nome contenha o termo
+    # E que estejam na lista de IDs da sala do aluno
+    trilhas_encontradas = Trilha.query.filter(
+        Trilha.id.in_(trilhas_na_sala_ids), # Filtro de Autorização: A trilha deve estar na sala do aluno
+        Trilha.nome.ilike(termo_like)       # Filtro de Pesquisa: Nome da trilha contém o termo
+    ).all()
+
+    if not trilhas_encontradas:
+        return jsonify({"message": f"Nenhuma trilha encontrada com o termo '{search_term}' na sua sala."}), 404
+
+    return jsonify([t.to_dict() for t in trilhas_encontradas]), 200
 
 # ROTA PARA VER AS TRILHAS DISPONIVEIS NA SALA, PELO ALUNO - TESTADA E FUNCIONANDO
 @app.route('/api/aluno/trilhas', methods=['GET'])

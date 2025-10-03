@@ -788,7 +788,7 @@ def get_perfil_aluno(aluno_id):
 
     return jsonify(perfil_do_aluno), 200
 
-# ROTA PARA VER RELATÓRIO DO ALUNO POR TRILHA - AINDA NÃO TESTADA
+# ROTA PARA VER RELATÓRIO DO ALUNO POR TRILHA - TESTADA E FUNCIONANDO
 @app.route('/api/alunos/<int:aluno_id>/historico/trilha/<int:trilha_id>', methods=['GET'])
 @jwt_required()
 def get_historico_aluno_por_trilha(aluno_id, trilha_id):
@@ -1002,7 +1002,7 @@ def get_aluno_trilhas():
         "trilhas": trilhas_da_sala
     }), 200
 
-# ROTA PARA VER OS JOGOS DE UMA TRILHA, PELO ALUNO - AINDA NÃO TESTADA
+# ROTA PARA VER OS JOGOS DE UMA TRILHA, PELO ALUNO - TESTADA E FUNCIONANDO
 @app.route('/api/trilhas/<int:trilha_id>/jogos', methods=['GET'])
 @jwt_required()
 def get_jogos_da_trilha(trilha_id):
@@ -1055,7 +1055,7 @@ def get_jogos_da_trilha(trilha_id):
         "jogos": jogos_da_trilha
     }), 200
 
-# ROTA PARA SALVAR DESEMPENHO DO ALUNO - AINDA NÃO TESTADA
+# ROTA PARA SALVAR DESEMPENHO DO ALUNO - TESTADA E FUNCIONANDO
 @app.route('/api/desempenho', methods=['POST'])
 @jwt_required()
 def save_desempenho():

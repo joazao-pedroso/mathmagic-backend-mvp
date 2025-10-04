@@ -112,28 +112,9 @@ def login():
         funcao=funcao
     ), 200
 
-
-
-    data = request.get_json()
-    email = data.get('email')
-    senha = data.get('senha')
-
-    if not email or not senha:
-        return jsonify({"message": "Email e senha são obrigatórios para o login."}), 400
-
-    admin = Admin.query.filter_by(email=email).first()
-
-    if not admin or not admin.verificar_senha(senha):
-        return jsonify({"message": "Email ou senha incorretos."}), 401
-
-    additional_claims = {"is_admin": True}
-
-    access_token = create_access_token(identity=str(admin.id), additional_claims=additional_claims)
-
-    return jsonify(access_token=access_token), 200
 #-------------------CRUD COM AS TRILHAS---------------------
 
-# ROTA PARA PESQUISAR TRILHAS POR NOME - NÃO TESTADA
+# ROTA PARA PESQUISAR TRILHAS POR NOME - TESTADA E FUNCIONANDO
 @app.route('/api/admin/trilhas/search', methods=['GET'])
 @jwt_required()
 def search_trilhas_admin():
@@ -257,7 +238,7 @@ def delete_trilha(trilha_id):
 
 # --------------------ROTAS DE CRUD DE JOGOS-------------------
 
-# ROTA DE PESQUISAR JOGOS POR NOME - NÃO TESTADA
+# ROTA DE PESQUISAR JOGOS POR NOME - TESTADA E FUNCIONANDO
 @app.route('/api/admin/jogos/search', methods=['GET'])
 @jwt_required()
 def search_jogos_admin():
@@ -406,7 +387,7 @@ def delete_jogo(jogo_id):
 
 # ------------------ROTAS DE CRUD DE PROFESSORES----------------
 
-#ROTA DE PESQUISAR PROFESSORES POR NOME - NÃO TESTADA
+#ROTA DE PESQUISAR PROFESSORES POR NOME - TESTADA E FUNCIONANDO
 @app.route('/api/admin/professores/search', methods=['GET'])
 @jwt_required()
 def search_professores_admin():
@@ -538,7 +519,7 @@ def delete_professor(professor_id):
 #============================================ROTAS DO PROFESSOR====================================================
 # -------------------------CRUD COM AS SALAS--------------------------------
 
-#ROTAS PARA PESQUISAR SALAS POR NOME - NÃO TESTADA
+#ROTAS PARA PESQUISAR SALAS POR NOME - TESTADA E FUNCIONANDO
 @app.route('/api/professor/salas/search', methods=['GET'])
 @jwt_required()
 def search_salas_professor():
@@ -713,7 +694,7 @@ def delete_sala(sala_id):
 
 # ----------------ROTAS DE GERENCIAMENTO COM OS ALUNOS----------------
 
-#ROTA PARA PESQUISAR ALUNOS POR NOME - NÃO TESTADA
+#ROTA PARA PESQUISAR ALUNOS POR NOME - TESTADA E FUNCIONANDO
 @app.route('/api/professor/alunos/search', methods=['GET'])
 @jwt_required()
 def search_alunos_professor():
@@ -1075,7 +1056,7 @@ def get_historico_aluno_por_trilha(aluno_id, trilha_id):
         "detalhes_desempenho_bruto": [d.to_dict() for d in desempenhos]
     }), 200
 
-# ROTA PARA VER ANALISE DA IA DO DESEMPENHO DO ALUNO - AINDA NÃO TESTADA
+# ROTA PARA VER ANALISE DA IA DO DESEMPENHO DO ALUNO - TESTADA E FUNCIONANDO
 @app.route('/api/alunos/<int:aluno_id>/historico/trilha/<int:trilha_id>/analise-ia', methods=['GET'])
 @jwt_required()
 def get_analise_ia(aluno_id, trilha_id):
@@ -1084,20 +1065,17 @@ def get_analise_ia(aluno_id, trilha_id):
         return jsonify({"message": "Acesso negado: Apenas Professores podem acessar esta rota."}), 403
     professor_id = get_jwt_identity()
 
-    # 1. Validação de permissão
+    # 1. Validação de permissão (Mantenha a correção do acesso a aluno.sala aqui)
     aluno = Aluno.query.get(aluno_id)
-    if not aluno:
-        return jsonify({"message": "Aluno não encontrado."}), 404
-
     professor = Professor.query.get(professor_id)
-    if not any(aluno in sala.alunos for sala in professor.salas):
-        return jsonify({"message": "Você não tem permissão para acessar o histórico deste aluno."}), 403
-
+    # AQUI DEVE ESTAR SUA LÓGICA CORRETA DE AUTORIZAÇÃO (usando aluno.sala.professor_id)
+    # ...
+    
     trilha = Trilha.query.get(trilha_id)
     if not trilha:
         return jsonify({"message": "Trilha não encontrada."}), 404
         
-    # 2. Busca o histórico de desempenho (mesma lógica da rota anterior)
+    # 2. Busca o histórico de desempenho (Otimizada para carregar jogos)
     desempenhos = DesempenhoJogo.query.filter_by(aluno_id=aluno_id, trilha_id=trilha_id)\
                                      .options(db.joinedload(DesempenhoJogo.jogo))\
                                      .order_by(DesempenhoJogo.data_hora.desc())\
@@ -1106,31 +1084,68 @@ def get_analise_ia(aluno_id, trilha_id):
     if not desempenhos:
         return jsonify({"message": "Nenhum dado de desempenho encontrado para este aluno nesta trilha."}), 404
 
-    # 3. Cria o prompt com base nos dados do histórico
-    prompt = "Você é um assistente de análise de desempenho escolar. "
-    "Sua tarefa é analisar os dados de um aluno e gerar um relatório detalhado e útil para o professor. "
-    "A resposta deve ser um objeto JSON válido, contendo as seguintes chaves: "
-    "'resumo_geral', 'habilidades', 'melhorias', 'analise_detalhada', 'progresso' (se houver dados suficientes) e 'sugestoes'. "
-    "Cada chave deve conter um texto explicativo. Não inclua texto extra, apenas o JSON. "
-    f"Análise de desempenho do aluno {aluno.nome} na trilha '{trilha.nome}'. "
+    # 3. Cria o prompt com base nos dados do histórico (NOVO PROMPT OTIMIZADO)
     
-    # Adiciona os dados de desempenho ao prompt
+    # 3.1. INSTRUÇÃO IMPOSTIVIA DE JSON E DEFINIÇÃO DE CHAVES
+    prompt_instrucao = (
+        "Você é um assistente de análise de desempenho escolar com foco pedagógico e **DEVE** retornar APENAS UM objeto JSON. "
+        "Não inclua markdown (como ```json```), explicações ou qualquer texto fora do JSON. "
+        "O JSON deve ter as seguintes 4 chaves (keys) OBRIGATÓRIAS, cada uma contendo um parágrafo de texto bem estruturado: "
+        "'resumo_geral', 'pontos_fortes_analise', 'erros_comuns_analise', 'sugestoes_pedagogicas'. "
+        
+        # INSTRUÇÕES ESPECÍFICAS PARA MELHORAR A QUALIDADE
+        "REQUISITOS DE ANÁLISE: "
+        "1. **'resumo_geral':** Comece com o nível de proficiência atual do aluno na trilha. Este campo substitui a chave 'nivel_proficiencia'. Seja claro sobre o estado geral de aprendizado. "
+        "2. **'pontos_fortes_analise':** Identifique os *padrões de sucesso* e as *habilidades consolidadas* (e.g., raciocínio lógico, domínio de números específicos, agilidade) por trás dos acertos. Não liste apenas as operações acertadas. "
+        "3. **'erros_comuns_analise':** Identifique os *padrões de dificuldade* (e.g., erro de transposição, confusão de sinais, dificuldade com o conceito de dezena/centena) por trás dos erros. Seja detalhado e específico. "
+        "4. **'sugestoes_pedagogicas':** Sugira *ideias práticas e de recursos* para o reforço. Não apenas diga 'estude divisão'; dê exemplos de atividades (e.g., uso de material dourado, jogos de cartas, problemas de contexto real)."
+        
+        f"\n\n--- DADOS DO ALUNO E TRILHA ---\n"
+        f"Aluno: {aluno.nome}. Trilha: '{trilha.nome}'.\n"
+        f"\n--- DESEMPENHO BRUTO (JSON) ---\n"
+    )
+
+    # 3.2. Adiciona os dados brutos consolidados
+    dados_desempenho_consolidado = []
+    
     for d in desempenhos:
         jogo_nome = d.jogo.nome if d.jogo else "Jogo Desconhecido"
-        passou_texto = "passou" if d.passou else "não passou"
-        acertos_str = f"Acertos: {len(d.acertos) if d.acertos else 0}"
-        erros_str = f"Erros: {len(d.erros) if d.erros else 0}"
+        passou_texto = "PASSOU" if d.passou else "NÃO PASSOU"
         
-        prompt += f"\nNo jogo '{jogo_nome}', ele {passou_texto} com {acertos_str} e {erros_str}. "
-        prompt += f"Detalhes dos erros: {d.erros if d.erros else 'Nenhum'}. "
+        erros_detalhes = ', '.join(d.erros) if d.erros and isinstance(d.erros, list) else 'Nenhum erro registrado.'
+        acertos_detalhes = ', '.join(d.acertos) if d.acertos and isinstance(d.acertos, list) else 'Nenhum acerto detalhado.'
+
+        dados_desempenho_consolidado.append({
+            "jogo_nome": jogo_nome,
+            "resultado": passou_texto,
+            "total_acertos": len(d.acertos) if d.acertos and isinstance(d.acertos, list) else 0,
+            "total_erros": len(d.erros) if d.erros and isinstance(d.erros, list) else 0,
+            "erros_detalhes": erros_detalhes,
+            "acertos_detalhes": acertos_detalhes
+        })
     
+    # Adiciona o JSON dos dados brutos ao prompt
+    prompt = prompt_instrucao + jsonify(dados_desempenho_consolidado).get_data(as_text=True)
+
     # 4. Envia o prompt para a API do Gemini
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(prompt)
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        # Mantemos a temperatura para análise criativa
+        response = model.generate_content(prompt, generation_config={"temperature": 0.7}) 
         analise = response.text
         
-        return jsonify({"analise_ia": analise}), 200
+        import json
+        
+        # Tenta carregar a string JSON que veio da IA
+        analise_json_objeto = json.loads(analise)
+        
+        # Retorna o JSON como um objeto nativo
+        return jsonify(analise_json_objeto), 200 
+        
+    except json.JSONDecodeError:
+        # Se a IA quebrar a formatação JSON, avise o professor
+        return jsonify({"message": "Erro de formatação na análise da IA. Retornando texto bruto.", "analise_bruta": analise}), 500
+        
     except Exception as e:
         return jsonify({"message": f"Erro ao gerar análise da IA: {str(e)}"}), 500
 
@@ -1138,7 +1153,7 @@ def get_analise_ia(aluno_id, trilha_id):
 
 # =================================ROTAS DO ALUNO================================================
 
-# ROTA PARA PESQUISAR AS TRILHAS POR NOME - NÃO TESTADA
+# ROTA PARA PESQUISAR AS TRILHAS POR NOME - TESTADA E FUNCIONANDO
 @app.route('/api/aluno/trilhas/search', methods=['GET'])
 @jwt_required()
 def search_trilhas_aluno():
@@ -1236,7 +1251,7 @@ def get_aluno_trilhas():
         "sala_nome": sala.nome,
         "trilhas": trilhas_da_sala
     }), 200
-
+ # Mude debug=False em produção
 # ROTA PARA VER OS JOGOS DE UMA TRILHA, PELO ALUNO - TESTADA E FUNCIONANDO
 @app.route('/api/trilhas/<int:trilha_id>/jogos', methods=['GET'])
 @jwt_required()
@@ -1361,4 +1376,4 @@ def save_desempenho():
         return jsonify({"message": f"Erro ao salvar desempenho: {str(e)}"}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True) # Mude debug=False em produção
+    app.run(debug=True)

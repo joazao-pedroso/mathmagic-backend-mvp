@@ -78,18 +78,42 @@ def get_sala():
 
     professor_id = get_jwt_identity()
 
+    # O uso do .options(joinedload()) pode otimizar a busca, mas vamos focar na contagem.
     salas = Sala.query.filter_by(professor_id=professor_id).all()
     
     if not salas:
         return jsonify({"message": "Nenhuma sala encontrada para este professor."}), 404
 
-    salas_com_alunos = []
-    for sala in salas:
-        sala_dict = sala.to_dict()
-        sala_dict['alunos'] = [aluno.to_dict() for aluno in sala.alunos]
-        salas_com_alunos.append(sala_dict)
+    salas_com_contagem = []
     
-    return jsonify(salas_com_alunos), 200
+    # Itera sobre as salas e calcula as contagens
+    for sala in salas:
+        # Pega os dados básicos da sala
+        sala_dict = sala.to_dict() 
+        
+        # *** ADICIONANDO AS CONTIDADES DE ALUNOS E TRILHAS ***
+        
+        # 1. Contagem de Alunos: Usa a coleção de relacionamento e o método count()
+        # Nota: 'alunos' é o nome do relacionamento na sua model Sala
+        sala_dict['contagem_alunos'] = sala.alunos.count() 
+        
+        # 2. Contagem de Trilhas: Usa a coleção de relacionamento (sala_trilha)
+        # Nota: 'trilhas' deve ser o nome do relacionamento com a tabela sala_trilha
+        # Se você tiver um relacionamento direto 'sala.trilhas' ou 'sala.sala_trilhas':
+        try:
+             sala_dict['contagem_trilhas'] = sala.trilhas.count() 
+        except AttributeError:
+             # Caso o relacionamento seja diferente, ajuste o nome da propriedade
+             print(f"Aviso: O relacionamento 'trilhas' não existe no modelo Sala. Verifique o nome correto.")
+             sala_dict['contagem_trilhas'] = 0 # ou use o nome correto
+        
+        # Removendo a lista completa de alunos, pois o frontend só precisa da contagem
+        if 'alunos' in sala_dict:
+             del sala_dict['alunos']
+             
+        salas_com_contagem.append(sala_dict)
+    
+    return jsonify(salas_com_contagem), 200
 
 # ROTA PARA CRIAR SALAS - TESTADA E FUNCIONANDO
 @professor_bp.route('/salas', methods=['POST'])

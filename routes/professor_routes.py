@@ -95,7 +95,8 @@ def get_sala():
         
         # 1. Contagem de Alunos: Usa a coleção de relacionamento e o método count()
         # Nota: 'alunos' é o nome do relacionamento na sua model Sala
-        sala_dict['contagem_alunos'] = sala.alunos.count() 
+        sala_dict['contagem_alunos'] = sala.alunos.count()
+        sala_dict['contagem_trilhas'] = sala.trilhas.count()
         
         # 2. Contagem de Trilhas: Usa a coleção de relacionamento (sala_trilha)
         # Nota: 'trilhas' deve ser o nome do relacionamento com a tabela sala_trilha
@@ -110,6 +111,9 @@ def get_sala():
         # Removendo a lista completa de alunos, pois o frontend só precisa da contagem
         if 'alunos' in sala_dict:
              del sala_dict['alunos']
+             
+        if 'trilhas' in sala_dict:
+         del sala_dict['trilhas']
              
         salas_com_contagem.append(sala_dict)
     

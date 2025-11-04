@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from sqlalchemy.orm import joinedload
+from blacklist import BLACKLIST 
 
 # Importações dos Modelos
 from models import db, Aluno, Trilha, Jogo, DesempenhoJogo, Sala 

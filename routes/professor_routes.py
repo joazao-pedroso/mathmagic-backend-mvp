@@ -81,7 +81,7 @@ def get_sala():
     salas = Sala.query.filter_by(professor_id=professor_id).all()
     
     if not salas:
-        return jsonify({"message": "Nenhuma sala encontrada para este professor."}), 404
+        return jsonify({"message": "Nenhuma sala encontrada para este professor."})
 
     salas_com_alunos = []
     for sala in salas:
@@ -90,6 +90,23 @@ def get_sala():
         salas_com_alunos.append(sala_dict)
     
     return jsonify(salas_com_alunos), 200
+
+@professor_bp.route('/trilhas', methods=['GET'])
+@jwt_required()
+def get_trilhas():
+    claims = get_jwt()
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas Professores podem acessar esta rota."}), 403
+
+    # Busca todas as trilhas (sem filtrar por professor)
+    trilhas = Trilha.query.all()
+
+    if not trilhas:
+        return jsonify({"message": "Nenhuma trilha cadastrada no sistema."}), 200
+
+    trilhas_data = [trilha.to_dict() for trilha in trilhas]
+
+    return jsonify(trilhas_data), 200
 
 # ROTA PARA CRIAR SALAS - TESTADA E FUNCIONANDO
 @professor_bp.route('/salas', methods=['POST'])
@@ -135,6 +152,31 @@ def create_sala():
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": f"Erro ao criar sala: {str(e)}"}), 500
+    
+@professor_bp.route('/salas/<int:sala_id>', methods=['GET'])
+@jwt_required()
+def get_sala_by_id(sala_id):
+    claims = get_jwt()
+
+    # 1. Verifica se o usuário logado é um professor
+    if claims.get('funcao') != 'professor':
+        return jsonify({"message": "Acesso negado: Apenas Professores podem acessar esta rota."}), 403
+
+    # 2. Obtém o ID do professor autenticado
+    professor_id = get_jwt_identity()
+
+    # 3. Busca a sala com o ID informado e pertencente ao professor logado
+    sala = Sala.query.filter_by(id=sala_id, professor_id=professor_id).first()
+
+    if not sala:
+        return jsonify({"message": "Sala não encontrada ou você não tem permissão para acessá-la."}), 404
+
+    # 4. Monta o dicionário da sala com os alunos vinculados
+    sala_dict = sala.to_dict()
+    sala_dict['alunos'] = [aluno.to_dict() for aluno in sala.alunos]
+
+    # 5. Retorna os dados completos da sala
+    return jsonify(sala_dict), 200
 
 # ROTA PARA EDITAR UMA SALA - TESTADA E FUNCIONANDO
 @professor_bp.route('/salas/<int:sala_id>', methods=['PUT'])

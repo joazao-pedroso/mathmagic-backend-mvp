@@ -1,8 +1,7 @@
 from dotenv import load_dotenv
 import os
 from datetime import timedelta
-
-# Importações ESSENCIAIS para a inicialização
+from blacklist import BLACKLIST
 from flask import Flask
 from config import Config
 from models import db
@@ -20,7 +19,6 @@ load_dotenv()
 genai.configure(api_key=os.environ.get('GEMINI_API_KEY'))
 
 # Variável GLOBAL para tokens revogados (BLACKLIST)
-BLACKLIST = set()
 
 # -------------------------------------------------------------
 # 2. INICIALIZAÇÃO DO FLASK E CONFIGS
@@ -34,11 +32,11 @@ app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=30)
 app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "fallback-secret-key")
 
 
-CORS(app)
 jwt = JWTManager(app)
 
 db.init_app(app)
 migrate = Migrate(app, db)
+CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
 
 # -------------------------------------------------------------
 # 3. IMPORTAÇÃO E REGISTRO DOS BLUEPRINTS (CRÍTICO)

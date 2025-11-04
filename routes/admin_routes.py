@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from sqlalchemy import or_
 from models import db, Trilha, Jogo, Professor
 
-# Definição do Blueprint
+# Definição do Blueprint    
 admin_bp = Blueprint('admin_bp', __name__, url_prefix='/api/admin')
 
 #-------------------CRUD COM AS TRILHAS---------------------
@@ -44,7 +44,7 @@ def get_trilhas():
     trilhas = Trilha.query.all()
 
     if not trilhas:
-        return jsonify({"message": "Nenhuma trilha encontrada."}), 404
+        return jsonify({"message": "Nenhuma trilha encontrada."})
 
     return jsonify([t.to_dict() for t in trilhas]), 200
 
@@ -165,8 +165,8 @@ def get_jogos():
     
     jogos = Jogo.query.all()
     
-    if not jogos:
-        return jsonify({"message": "Nenhum jogo encontrado."}), 404
+    if not  jogos:
+        return jsonify({"message": "Nenhum jogo encontrado."})
 
     jogos_list = []
     for jogo in jogos:
@@ -320,7 +320,7 @@ def get_professores():
     professores = Professor.query.all()
     
     if not professores:
-        return jsonify({"message": "Nenhum professor encontrado."}), 404
+        return jsonify({"message": "Nenhum professor encontrado."})
 
     return jsonify([p.to_dict() for p in professores]), 200
 

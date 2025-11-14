@@ -10,6 +10,55 @@ from models import db, Aluno, Trilha, Jogo, DesempenhoJogo, Sala
 aluno_bp = Blueprint('aluno_bp', __name__, url_prefix='/api/aluno')
 
 # =================================ROTAS DO ALUNO================================================
+@aluno_bp.route('/me', methods=['GET'])
+@jwt_required()
+def get_me_completo():
+    claims = get_jwt()
+
+    # 1. Permitir somente ALUNO
+    if claims.get('funcao') != 'aluno':
+        return jsonify({"message": "Acesso negado: Apenas alunos podem acessar esta rota."}), 403
+
+    # 2. ID do aluno
+    try:
+        aluno_id = int(get_jwt_identity())
+    except ValueError:
+        return jsonify({"message": "ID inválido no token."}), 401
+
+    aluno = Aluno.query.get(aluno_id)
+    if not aluno:
+        return jsonify({"message": "Aluno não encontrado."}), 404
+
+    # 3. Sala do aluno
+    sala = aluno.sala
+
+    if not sala:
+        return jsonify({"message": "O aluno não está associado a nenhuma sala."}), 404
+
+    # 4. Trilhas + jogos de cada trilha
+    trilhas_formatadas = []
+
+    for trilha in sala.trilhas:
+        trilhas_formatadas.append({
+            "id": trilha.id,
+            "nome": trilha.nome,
+            "descricao": trilha.descricao if hasattr(trilha, "descricao") else None,
+            "jogos": [jogo.to_dict() for jogo in trilha.jogos]
+        })
+
+    # 5. Resposta final
+    return jsonify({
+        "id": aluno.id,
+        "nome": aluno.nome,
+        "email": aluno.email,
+
+        "sala": {
+            "id": sala.id,
+            "nome": sala.nome
+        },
+
+        "trilhas": trilhas_formatadas
+    }), 200
 
 # ROTA PARA PESQUISAR AS TRILHAS POR NOME - NÃO TESTADA
 @aluno_bp.route('/trilhas/search', methods=['GET'])

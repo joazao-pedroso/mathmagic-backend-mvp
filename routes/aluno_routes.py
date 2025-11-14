@@ -231,3 +231,83 @@ def save_desempenho():
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": f"Erro ao salvar desempenho: {str(e)}"}), 500
+
+# ROTA PARA OBTER O MAPA DE JOGOS E STATUS DE PROGRESSÃO
+@aluno_bp.route('/trilhas/<int:trilha_id>/progressao', methods=['GET'])
+@jwt_required()
+def get_progressao_trilha(trilha_id):
+    # 1. VALIDAÇÃO E OBTENÇÃO DO ALUNO
+    claims = get_jwt()
+    if claims.get('funcao') != 'aluno':
+        return jsonify({"message": "Acesso negado: Apenas Alunos podem acessar esta rota."}), 403
+
+    try:
+        aluno_id = int(get_jwt_identity())
+    except ValueError:
+        return jsonify({"message": "ID de aluno no token inválido."}), 401
+
+    aluno = Aluno.query.get(aluno_id)
+    if not aluno or not aluno.sala:
+        return jsonify({"message": "Aluno ou Sala não encontrados."}), 404
+
+    # 2. VERIFICAÇÃO DE AUTORIZAÇÃO E TRILHA
+    trilha = Trilha.query.get(trilha_id)
+    if not trilha:
+        return jsonify({"message": "Trilha não encontrada."}), 404
+
+    # Garante que a trilha está associada à sala do aluno
+    if trilha not in aluno.sala.trilhas:
+        return jsonify({"message": "Trilha indisponível para sua sala."}), 403
+    
+    # 3. OBTÉM JOGOS E DESEMPENHO CONCLUÍDO
+    
+    # Carrega os jogos da trilha (assume-se que a ordem é pelo ID do jogo, 
+    # ou você pode adicionar uma coluna 'ordem' no futuro)
+    jogos_da_trilha = sorted(trilha.jogos, key=lambda j: j.id)
+
+    # Busca todos os desempenhos CONCLUÍDOS (passou=True) do aluno nesta trilha
+    # Isso é mais eficiente do que buscar um por um
+    desempenhos_concluidos = DesempenhoJogo.query.filter_by(
+        aluno_id=aluno_id,
+        trilha_id=trilha_id,
+        passou=True
+    ).all()
+
+    # Cria um set (conjunto) dos IDs dos jogos que o aluno já CONCLUIU
+    jogos_concluidos_ids = {d.jogo_id for d in desempenhos_concluidos}
+
+    # 4. LÓGICA DE PROGRESSÃO E MONTAGEM DO MAPA
+    mapa_jogos = []
+    jogo_anterior_concluido = True # O primeiro jogo sempre começa liberado (assume True)
+
+    for i, jogo in enumerate(jogos_da_trilha):
+        jogo_dict = jogo.to_dict()
+        
+        # O Jogo 1 (índice 0) está sempre liberado
+        if i == 0:
+            status = "liberado"
+        # O jogo anterior precisa ter sido concluído
+        elif jogo_anterior_concluido:
+            status = "liberado"
+        else:
+            status = "bloqueado"
+
+        # SOBRESCREVE o status se o jogo JÁ FOI CONCLUÍDO
+        if jogo.id in jogos_concluidos_ids:
+            status = "concluido"
+            # O jogo anterior para o PRÓXIMO jogo é este, e ele foi concluído.
+            jogo_anterior_concluido = True
+        else:
+            # Se o jogo não foi concluído, ele (ou um anterior) bloqueia o próximo
+            # Este status é usado para verificar a regra 'jogo_anterior_concluido'
+            jogo_anterior_concluido = False
+            
+        jogo_dict['status'] = status
+        mapa_jogos.append(jogo_dict)
+
+    # 5. RETORNO FINAL
+    return jsonify({
+        "trilha_id": trilha.id,
+        "trilha_nome": trilha.nome,
+        "mapa_jogos": mapa_jogos
+    }), 200

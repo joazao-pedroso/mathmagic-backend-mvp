@@ -1,7 +1,9 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt
+from blacklist import BLACKLIST
 from models import db, Admin, Professor, Aluno
-from app import BLACKLIST
+from flask_cors import CORS
+
 auth_bp = Blueprint('auth_bp', __name__, url_prefix='/api/auth')
 
 # ROTA DE REGISTRO DO ADM QUE RETORNA COM A SENHA HASH - TESTADA E FUNCIONANDO
